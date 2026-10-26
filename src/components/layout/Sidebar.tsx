@@ -17,6 +17,8 @@ interface NavItem {
   title: string;
   path?: string;
   icon: React.ReactNode;
+  /** Kept in the product, omitted from the menu until the feature is turned on. */
+  hidden?: boolean;
   children?: { title: string; path: string }[];
 }
 
@@ -36,6 +38,7 @@ const navItems: NavItem[] = [
     title: 'Sales', icon: <PointOfSale />,
     children: [
       { title: 'Quotations', path: '/sales/quotations' },
+      { title: 'Proforma Invoices', path: '/sales/proformas' },
       { title: 'Sales Orders', path: '/sales/orders' },
       { title: 'Delivery Notes', path: '/sales/delivery-notes' },
       { title: 'Sales Invoices', path: '/sales/invoices' },
@@ -57,13 +60,13 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    title: 'Point of Sale', icon: <PointOfSale />,
+    title: 'Point of Sale', icon: <PointOfSale />, hidden: true,
     children: [
       { title: 'POS Terminal', path: '/pos' },
     ],
   },
   {
-    title: 'HR & Payroll', icon: <Badge />,
+    title: 'HR & Payroll', icon: <Badge />, hidden: true,
     children: [
       { title: 'Employees', path: '/payroll/employees' },
       { title: 'Payroll & WPS', path: '/payroll/runs' },
@@ -140,7 +143,7 @@ export default function Sidebar({ open, onClose }: Props) {
         <Typography variant="caption" sx={{ color: brandColors.goldenTan }}>Version {APP_VERSION}</Typography>
       </Box>
       <List sx={{ flex: 1, overflow: 'auto', py: 1 }}>
-        {navItems.map((item) => (
+        {navItems.filter((item) => !item.hidden).map((item) => (
           <Box key={item.title}>
             {item.children ? (
               <>

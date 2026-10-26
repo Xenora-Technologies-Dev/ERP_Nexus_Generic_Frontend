@@ -5,7 +5,7 @@ import {
   Alert, CircularProgress, Grid, Autocomplete, IconButton,
 } from '@mui/material';
 import { GridColDef } from '@mui/x-data-grid';
-import { CheckCircle, Cancel, Delete, Visibility, PictureAsPdf, Print } from '@mui/icons-material';
+import { CheckCircle, Cancel, Delete, Visibility, PictureAsPdf, Print, Edit } from '@mui/icons-material';
 import { api, displayDocumentNumber, pdfFilename } from '../../api/client';
 import PageHeader from '../../components/common/PageHeader';
 import DocumentTable, { StatusChip } from '../../components/common/DocumentTable';
@@ -19,7 +19,7 @@ interface Vendor {
   address?: string | null; vatNumber?: string | null;
   phone?: string | null; email?: string | null;
 }
-interface Product { id: string; name: string; sku: string; sellingPrice: number; costPrice: number; vatRate: number; unit?: string; }
+interface Product { id: string; name: string; sku: string; sellingPrice: number; costPrice: number; vatRate: number; unit?: string; packing?: string | null; }
 interface PurchaseOrderItem {
   id: string; productId: string; quantity: number; unitPrice: number; vatRate: number;
   vatAmount?: number; total: number; description?: string;
@@ -95,6 +95,7 @@ export default function PurchaseOrdersPage() {
   const [notes, setNotes] = useState('');
   const [discount, setDiscount] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
 
   const fetchData = async () => {
@@ -110,7 +111,7 @@ export default function PurchaseOrdersPage() {
       setProducts(p.data.map((pr) => ({
         id: pr.id, name: pr.name, sku: pr.sku,
         sellingPrice: money(pr.costPrice), costPrice: money(pr.costPrice), vatRate: money(pr.vatRate),
-        unit: pr.unit,
+        unit: pr.unit, packing: pr.packing,
       })));
     } catch {
       setError('Failed to load purchase orders');
@@ -163,24 +164,60 @@ export default function PurchaseOrdersPage() {
     }
   };
 
+  const openEdit = async (order: PurchaseOrder) => {
+    setActionId(order.id);
+    try {
+      const res = await api.get<PurchaseOrder>(`/purchase/orders/${order.id}`);
+      const full = res.data;
+      setEditingOrder(full);
+      setVendorId(full.vendorId);
+      setDate(full.date.slice(0, 10));
+      setReference(full.reference || '');
+      setNotes(full.notes || '');
+      setDiscount(money(full.discount || 0));
+      setVatApplicable(full.vatApplicable !== false);
+      setItems((full.items || []).map((i) => ({
+        id: i.id,
+        productId: i.productId,
+        quantity: qtyOut(i.quantity),
+        unitPrice: money(i.unitPrice),
+        vatRate: money(i.vatRate),
+        taxCode: (i as { taxCode?: string | null }).taxCode || undefined,
+        unit: i.product?.unit,
+      })));
+      setDialogOpen(true);
+    } catch {
+      setError('Failed to load purchase order');
+    } finally {
+      setActionId(null);
+    }
+  };
+
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError('');
+    const payload = {
+      vendorId, date, reference: reference || null, vatApplicable, notes, discount,
+      items: items.filter((i) => i.productId).map((i) => ({
+        id: i.id, productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice, vatRate: i.vatRate, taxCode: i.taxCode || undefined,
+      })),
+    };
     try {
-      await api.post('/purchase/orders', {
-        vendorId, date, reference: reference || null, vatApplicable, notes, discount,
-        items: items.filter((i) => i.productId).map((i) => ({
-          productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice, vatRate: i.vatRate, taxCode: i.taxCode || undefined,
-        })),
-      });
+      if (editingOrder) {
+        await api.put(`/purchase/orders/${editingOrder.id}`, payload);
+        setSuccess('Purchase order updated');
+      } else {
+        await api.post('/purchase/orders', payload);
+        setSuccess('Purchase order created');
+      }
       setDialogOpen(false);
+      setEditingOrder(null);
       setReference('');
-      setSuccess('Purchase order created');
       fetchData();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg || 'Failed to create order');
+      setError(msg || 'Failed to save order');
     } finally {
       setSaving(false);
     }
@@ -241,7 +278,7 @@ export default function PurchaseOrdersPage() {
     { field: 'total', headerName: 'Total', width: 110, type: 'number' },
     { field: 'status', headerName: 'Status', width: 120, renderCell: ({ value }) => <StatusChip status={value as string} /> },
     {
-      field: 'actions', headerName: 'Actions', width: 200, sortable: false,
+      field: 'actions', headerName: 'Actions', width: 240, sortable: false,
       renderCell: ({ row }) => {
         const order = row as PurchaseOrder;
         const busy = actionId === order.id;
@@ -266,7 +303,12 @@ export default function PurchaseOrdersPage() {
                 </IconButton>
               </>
             )}
-            {['DRAFT', 'CANCELLED'].includes(order.status) && (
+            {['DRAFT', 'CONFIRMED', 'PARTIALLY_DELIVERED'].includes(order.status) && (
+              <IconButton size="small" title="Edit" disabled={busy} onClick={() => openEdit(order)}>
+                <Edit fontSize="small" />
+              </IconButton>
+            )}
+            {['DRAFT', 'CANCELLED', 'CONFIRMED'].includes(order.status) && (
               <IconButton size="small" title="Delete" color="error" disabled={busy} onClick={() => handleDelete(order)}>
                 <Delete fontSize="small" />
               </IconButton>
@@ -281,6 +323,7 @@ export default function PurchaseOrdersPage() {
     <Box>
       <PageHeader title="Purchase Orders" subtitle="Supplier purchase orders" actionLabel="New Order"
         onAction={() => {
+          setEditingOrder(null);
           setVendorId('');
           setDate(todayISO());
           setReference('');
@@ -297,7 +340,7 @@ export default function PurchaseOrdersPage() {
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="lg" fullWidth>
         <form onSubmit={handleCreate}>
-          <DialogTitle>New Purchase Order</DialogTitle>
+          <DialogTitle>{editingOrder ? 'Edit Purchase Order' : 'New Purchase Order'}</DialogTitle>
           <DialogContent>
             <Grid container spacing={2} sx={{ mb: 2, mt: 0.5 }}>
               <Grid item xs={12} sm={6}>
@@ -322,7 +365,7 @@ export default function PurchaseOrdersPage() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button type="submit" variant="contained" disabled={saving}>{saving ? <CircularProgress size={20} /> : 'Create'}</Button>
+            <Button type="submit" variant="contained" disabled={saving}>{saving ? <CircularProgress size={20} /> : editingOrder ? 'Update' : 'Create'}</Button>
           </DialogActions>
         </form>
       </Dialog>

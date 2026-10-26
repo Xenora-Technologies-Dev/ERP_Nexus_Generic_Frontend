@@ -17,8 +17,13 @@ interface Category { id: string; name: string; }
 interface Warehouse { id: string; name: string; code: string; address?: string; isActive: boolean; }
 interface Product {
   id: string; sku: string; name: string; description?: string; categoryId?: string;
-  unit: string; costPrice: number; sellingPrice: number; vatRate: number; taxCode?: string | null;
+  unit: string; packing?: string | null; costPrice: number; sellingPrice: number; vatRate: number; taxCode?: string | null;
   countryOfOrigin?: string | null; isActive: boolean; category?: Category; trackBatches?: boolean;
+}
+interface Uom { id: string; code: string; name: string; isActive: boolean; }
+interface StockQueryRow {
+  id: string; sku: string; name: string; packing?: string | null; unit: string;
+  sellingPrice: number; availableQty: number; expiryDate?: string | null; expiryStatus: string; category?: string | null;
 }
 interface StockItem {
   id: string; quantity: number;
@@ -36,7 +41,7 @@ interface HistoryItem {
 }
 
 const emptyProduct = {
-  sku: '', name: '', description: '', categoryId: '', unit: 'PCS',
+  sku: '', name: '', description: '', categoryId: '', unit: 'PCS', packing: '',
   costPrice: 0, sellingPrice: 0, vatRate: 5, taxCode: 'SR', countryOfOrigin: '', isActive: true, trackBatches: false,
 };
 
@@ -49,7 +54,12 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogType, setDialogType] = useState<'product' | 'category' | 'warehouse'>('product');
+  const [dialogType, setDialogType] = useState<'product' | 'category' | 'warehouse' | 'uom'>('product');
+  const [uoms, setUoms] = useState<Uom[]>([]);
+  const [uomForm, setUomForm] = useState({ code: '', name: '' });
+  const [stockSearch, setStockSearch] = useState('');
+  const [stockQuery, setStockQuery] = useState<StockQueryRow[]>([]);
+  const [queryLoading, setQueryLoading] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [productForm, setProductForm] = useState(emptyProduct);
   const [categoryName, setCategoryName] = useState('');
@@ -64,16 +74,18 @@ export default function InventoryPage() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [p, c, w, s] = await Promise.all([
+      const [p, c, w, s, u] = await Promise.all([
         api.get<Product[]>('/inventory/products'),
         api.get<Category[]>('/inventory/categories'),
         api.get<Warehouse[]>('/inventory/warehouses'),
         api.get<StockItem[]>('/inventory/stock'),
+        api.get<Uom[]>('/inventory/uoms'),
       ]);
       setProducts(p.data);
       setCategories(c.data);
       setWarehouses(w.data);
       setStock(s.data);
+      setUoms(u.data);
     } catch {
       setError('Failed to load inventory data');
     } finally {
@@ -103,7 +115,7 @@ export default function InventoryPage() {
     if (product) {
       setProductForm({
         sku: product.sku, name: product.name, description: product.description || '',
-        categoryId: product.categoryId || '', unit: product.unit,
+        categoryId: product.categoryId || '', unit: product.unit, packing: product.packing || '',
         costPrice: money(product.costPrice), sellingPrice: money(product.sellingPrice),
         vatRate: money(product.vatRate), taxCode: product.taxCode || 'SR', countryOfOrigin: product.countryOfOrigin || '',
         isActive: product.isActive, trackBatches: !!product.trackBatches,
@@ -132,6 +144,38 @@ export default function InventoryPage() {
     setDialogOpen(true);
   };
 
+  const openUomDialog = () => {
+    setDialogType('uom');
+    setUomForm({ code: '', name: '' });
+    setDialogOpen(true);
+  };
+
+  const deleteUom = async (row: Uom) => {
+    if (!window.confirm(`Delete unit ${row.code}?`)) return;
+    try {
+      await api.delete(`/inventory/uoms/${row.id}`);
+      fetchAll();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setError(msg || 'Failed to delete unit');
+    }
+  };
+
+  const runStockQuery = async (q = stockSearch) => {
+    setQueryLoading(true);
+    setError('');
+    try {
+      const res = await api.get<StockQueryRow[]>('/inventory/stock-query', { params: { search: q || undefined } });
+      setStockQuery(res.data);
+    } catch {
+      setError('Failed to search stock');
+    } finally {
+      setQueryLoading(false);
+    }
+  };
+
+  useEffect(() => { if (tab === 5) runStockQuery(''); }, [tab]);
+
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -142,6 +186,7 @@ export default function InventoryPage() {
           ...productForm,
           categoryId: productForm.categoryId || null,
           countryOfOrigin: productForm.countryOfOrigin || null,
+          packing: productForm.packing || null,
           sku: productForm.sku || undefined,
         };
         if (!editing && !payload.categoryId) {
@@ -156,6 +201,8 @@ export default function InventoryPage() {
         }
       } else if (dialogType === 'category') {
         await api.post('/inventory/categories', { name: categoryName });
+      } else if (dialogType === 'uom') {
+        await api.post('/inventory/uoms', { code: uomForm.code, name: uomForm.name });
       } else {
         await api.post('/inventory/warehouses', warehouseForm);
       }
@@ -175,6 +222,7 @@ export default function InventoryPage() {
     if (tab === 0) return { label: 'Add Product', action: () => openProductDialog() };
     if (tab === 1) return { label: 'Add Category', action: openCategoryDialog };
     if (tab === 2) return { label: 'Add Warehouse', action: openWarehouseDialog };
+    if (tab === 3) return { label: 'Add UOM', action: openUomDialog };
     return null;
   };
 
@@ -189,6 +237,8 @@ export default function InventoryPage() {
     { field: 'sku', headerName: 'SKU', width: 110 },
     { field: 'name', headerName: 'Name', flex: 1, minWidth: 150 },
     { field: 'category', headerName: 'Category', width: 130, valueGetter: (_, row) => (row as Product).category?.name || '-' },
+    { field: 'unit', headerName: 'UOM', width: 80 },
+    { field: 'packing', headerName: 'Packing', width: 120, valueGetter: (_, row) => (row as Product).packing || '-' },
     { field: 'countryOfOrigin', headerName: 'Origin', width: 100, valueGetter: (_, row) => (row as Product).countryOfOrigin || '-' },
     { field: 'sellingPrice', headerName: 'Sell Price', width: 100, type: 'number' },
     { field: 'costPrice', headerName: 'Cost Price', width: 100, type: 'number' },
@@ -220,8 +270,38 @@ export default function InventoryPage() {
   const stockCols: GridColDef[] = [
     { field: 'sku', headerName: 'SKU', width: 110, valueGetter: (_, row) => (row as StockItem).product.sku },
     { field: 'product', headerName: 'Product', flex: 1, valueGetter: (_, row) => (row as StockItem).product.name },
+    { field: 'packing', headerName: 'Packing', width: 120, valueGetter: (_, row) => (row as StockItem & { product: { packing?: string | null } }).product.packing || '-' },
     { field: 'warehouse', headerName: 'Warehouse', width: 150, valueGetter: (_, row) => (row as StockItem).warehouse.name },
     { field: 'quantity', headerName: 'Qty', width: 100, type: 'number' },
+  ];
+
+  const uomCols: GridColDef[] = [
+    { field: 'code', headerName: 'Code', width: 120 },
+    { field: 'name', headerName: 'Name', flex: 1 },
+    {
+      field: 'actions', headerName: '', width: 80, sortable: false,
+      renderCell: ({ row }) => (
+        <Button size="small" color="error" onClick={() => deleteUom(row as Uom)}>Delete</Button>
+      ),
+    },
+  ];
+
+  const queryCols: GridColDef[] = [
+    { field: 'sku', headerName: 'Item Code', width: 120 },
+    { field: 'name', headerName: 'Product', flex: 1, minWidth: 160 },
+    { field: 'packing', headerName: 'Packing', width: 120, valueGetter: (_, row) => (row as StockQueryRow).packing || '-' },
+    { field: 'unit', headerName: 'UOM', width: 80 },
+    { field: 'availableQty', headerName: 'Available', width: 110, type: 'number' },
+    { field: 'sellingPrice', headerName: 'Selling Price', width: 120, type: 'number' },
+    {
+      field: 'expiryDate', headerName: 'Expiry', width: 130,
+      valueGetter: (_, row) => {
+        const r = row as StockQueryRow;
+        if (!r.expiryDate) return '-';
+        const label = new Date(r.expiryDate).toLocaleDateString();
+        return r.expiryStatus === 'expired' ? `${label} (expired)` : label;
+      },
+    },
   ];
 
   return (
@@ -239,19 +319,36 @@ export default function InventoryPage() {
         <Tab label="Products" />
         <Tab label="Categories" />
         <Tab label="Warehouses" />
+        <Tab label="Units of Measure" />
         <Tab label="Stock Levels" />
+        <Tab label="Stock Query" />
       </Tabs>
 
       {tab === 0 && <DocumentTable rows={products} columns={productCols} loading={loading} />}
       {tab === 1 && <DocumentTable rows={categories} columns={categoryCols} loading={loading} />}
       {tab === 2 && <DocumentTable rows={warehouses} columns={warehouseCols} loading={loading} />}
-      {tab === 3 && <DocumentTable rows={stock} columns={stockCols} loading={loading} />}
+      {tab === 3 && <DocumentTable rows={uoms} columns={uomCols} loading={loading} />}
+      {tab === 4 && <DocumentTable rows={stock} columns={stockCols} loading={loading} />}
+      {tab === 5 && (
+        <Box>
+          <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+            <TextField size="small" label="Search item code, name or packing" value={stockSearch}
+              onChange={(e) => setStockSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') runStockQuery(); }}
+              sx={{ minWidth: 280 }} />
+            <Button variant="contained" onClick={() => runStockQuery()}>Search</Button>
+            <Button variant="outlined" onClick={() => { setStockSearch(''); runStockQuery(''); }}>Show all</Button>
+          </Box>
+          <DocumentTable rows={stockQuery} columns={queryCols} loading={queryLoading || loading} />
+        </Box>
+      )}
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
         <form onSubmit={handleSave}>
           <DialogTitle>
             {dialogType === 'product' ? (editing ? 'Edit Product' : 'New Product') :
-              dialogType === 'category' ? 'New Category' : 'New Warehouse'}
+              dialogType === 'category' ? 'New Category' :
+              dialogType === 'uom' ? 'New Unit of Measure' : 'New Warehouse'}
           </DialogTitle>
           <DialogContent>
             {dialogType === 'product' && (
@@ -278,9 +375,20 @@ export default function InventoryPage() {
                     {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </TextField>
                 </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="Unit" value={productForm.unit}
-                    onChange={(e) => setProductForm({ ...productForm, unit: e.target.value })} />
+                <Grid item xs={12} sm={3}>
+                  <TextField fullWidth select label="UOM" value={productForm.unit}
+                    onChange={(e) => setProductForm({ ...productForm, unit: e.target.value })}
+                    SelectProps={{ native: true }}>
+                    {uoms.filter((u) => u.isActive).map((u) => <option key={u.id} value={u.code}>{u.code} — {u.name}</option>)}
+                    {productForm.unit && !uoms.some((u) => u.code === productForm.unit) && (
+                      <option value={productForm.unit}>{productForm.unit}</option>
+                    )}
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <TextField fullWidth label="Packing" value={productForm.packing}
+                    helperText="e.g. 12 x 1 LTR"
+                    onChange={(e) => setProductForm({ ...productForm, packing: e.target.value })} />
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField fullWidth label="Country of Origin" value={productForm.countryOfOrigin}
@@ -319,6 +427,19 @@ export default function InventoryPage() {
               <TextField fullWidth required label="Category Name" value={categoryName} sx={{ mt: 1 }}
                 onChange={(e) => setCategoryName(e.target.value)} />
             )}
+            {dialogType === 'uom' && (
+              <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                <Grid item xs={12} sm={6}>
+                  <TextField fullWidth required label="Code" value={uomForm.code}
+                    helperText="PCS, CTN, KG…"
+                    onChange={(e) => setUomForm({ ...uomForm, code: e.target.value.toUpperCase() })} />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField fullWidth required label="Name" value={uomForm.name}
+                    onChange={(e) => setUomForm({ ...uomForm, name: e.target.value })} />
+                </Grid>
+              </Grid>
+            )}
             {dialogType === 'warehouse' && (
               <Grid container spacing={2} sx={{ mt: 0.5 }}>
                 <Grid item xs={12} sm={6}>
@@ -354,6 +475,7 @@ export default function InventoryPage() {
                 <Grid item xs={6}><Typography variant="caption" color="text.secondary">Name</Typography><Typography>{viewProduct.name}</Typography></Grid>
                 <Grid item xs={6}><Typography variant="caption" color="text.secondary">Category</Typography><Typography>{viewProduct.category?.name || '-'}</Typography></Grid>
                 <Grid item xs={6}><Typography variant="caption" color="text.secondary">Unit</Typography><Typography>{viewProduct.unit}</Typography></Grid>
+                <Grid item xs={6}><Typography variant="caption" color="text.secondary">Packing</Typography><Typography>{viewProduct.packing || '-'}</Typography></Grid>
                 <Grid item xs={6}><Typography variant="caption" color="text.secondary">Country of Origin</Typography><Typography>{viewProduct.countryOfOrigin || '-'}</Typography></Grid>
                 <Grid item xs={4}><Typography variant="caption" color="text.secondary">Cost</Typography><Typography>{fmtMoney(viewProduct.costPrice)}</Typography></Grid>
                 <Grid item xs={4}><Typography variant="caption" color="text.secondary">Sell Price</Typography><Typography>{fmtMoney(viewProduct.sellingPrice)}</Typography></Grid>

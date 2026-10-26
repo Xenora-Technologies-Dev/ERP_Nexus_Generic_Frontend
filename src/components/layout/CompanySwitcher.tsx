@@ -5,6 +5,9 @@ import { useAuth } from '../../context/AuthContext';
 
 interface Company { id: string; code: string; name: string }
 
+/** Company switching and “new company” stay implemented, but are hidden for now. */
+const SHOW_MULTI_COMPANY = false;
+
 /** Active company selector. The choice is sent as X-Company-Id on every API call (see api/client). */
 export default function CompanySwitcher() {
   const { hasPermission } = useAuth();
@@ -36,7 +39,7 @@ export default function CompanySwitcher() {
     }
   };
 
-  if (!companies.length) return null;
+  if (!SHOW_MULTI_COMPANY || !companies.length) return null;
   return (
     <>
       <select aria-label="Company" value={current} onChange={(e) => switchTo(e.target.value)}

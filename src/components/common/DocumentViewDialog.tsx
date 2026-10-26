@@ -15,7 +15,9 @@ export interface DocumentViewItem {
   vatRate?: number;
   vatAmount?: number;
   total?: number;
-  product?: { name?: string; sku?: string; unit?: string };
+  product?: { name?: string; sku?: string; unit?: string; packing?: string | null };
+  itemCode?: string;
+  packing?: string | null;
 }
 
 export interface DocumentViewData {
@@ -51,6 +53,8 @@ interface Props {
   onDownload?: () => void | Promise<void>;
   onPrint?: () => void | Promise<void>;
   busy?: boolean;
+  /** PNG of the invoice authenticity QR */
+  qrSrc?: string | null;
 }
 
 const formatDate = (d?: string) => formatDateDDMMYYYY(d);
@@ -68,7 +72,7 @@ const lineVatAmount = (item: DocumentViewItem): number => {
 };
 
 export default function DocumentViewDialog({
-  open, onClose, title, document, extraFields, variant = 'standard', onDownload, onPrint, busy,
+  open, onClose, title, document, extraFields, variant = 'standard', onDownload, onPrint, busy, qrSrc,
 }: Props) {
   if (!document) return null;
 
@@ -126,6 +130,12 @@ export default function DocumentViewDialog({
                   <StatusChip status={document.status} />
                 </Box>
               )}
+              {qrSrc && (
+                <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', alignItems: { sm: 'flex-end' } }}>
+                  <Box component="img" src={qrSrc} alt="Invoice verification QR" sx={{ width: 96, height: 96 }} />
+                  <Typography variant="caption" color="text.secondary">Scan to verify</Typography>
+                </Box>
+              )}
             </Box>
           </Grid>
         </Grid>
@@ -135,7 +145,9 @@ export default function DocumentViewDialog({
             <TableHead>
               <TableRow>
                 <TableCell>#</TableCell>
+                {!isVoucher && <TableCell>Item Code</TableCell>}
                 <TableCell>Description</TableCell>
+                {!isVoucher && <TableCell>Packing</TableCell>}
                 {!isVoucher && (
                   <>
                     <TableCell align="center">UOM</TableCell>
@@ -158,7 +170,9 @@ export default function DocumentViewDialog({
               {items.map((item, idx) => (
                 <TableRow key={idx}>
                   <TableCell>{idx + 1}</TableCell>
+                  {!isVoucher && <TableCell>{item.itemCode || item.product?.sku || '-'}</TableCell>}
                   <TableCell>{item.description || item.productName || item.product?.name || '-'}</TableCell>
+                  {!isVoucher && <TableCell>{item.packing || item.product?.packing || '-'}</TableCell>}
                   {!isVoucher && (
                     <>
                       <TableCell align="center">{item.unit?.trim() || item.product?.unit?.trim() || '-'}</TableCell>

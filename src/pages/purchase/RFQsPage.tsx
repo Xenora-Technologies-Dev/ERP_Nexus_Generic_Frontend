@@ -13,7 +13,7 @@ import DocumentDateField from '../../components/common/DocumentDateField';
 import { todayISO, formatDateDDMMYYYY } from '../../utils/date';
 
 interface Vendor { id: string; name: string; code: string; }
-interface Product { id: string; name: string; sku: string; sellingPrice: number; costPrice: number; vatRate: number; unit?: string; }
+interface Product { id: string; name: string; sku: string; sellingPrice: number; costPrice: number; vatRate: number; unit?: string; packing?: string | null; }
 interface RFQ {
   id: string; documentNumber: string; date: string; status: string;
   vendor: Vendor;
@@ -45,7 +45,7 @@ export default function RFQsPage() {
       setRfqs(r.data);
       setVendors(v.data);
       setProducts(p.data.map((pr) => ({
-        id: pr.id, name: pr.name, sku: pr.sku,
+        id: pr.id, name: pr.name, sku: pr.sku, packing: pr.packing,
         sellingPrice: money(pr.costPrice), costPrice: money(pr.costPrice), vatRate: money(pr.vatRate),
         unit: pr.unit,
       })));

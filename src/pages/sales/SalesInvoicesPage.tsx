@@ -101,6 +101,7 @@ export default function SalesInvoicesPage() {
   const [editingInvoice, setEditingInvoice] = useState<SalesInvoice | null>(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [viewInvoice, setViewInvoice] = useState<SalesInvoice | null>(null);
+  const [qrSrc, setQrSrc] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -251,6 +252,11 @@ export default function SalesInvoicesPage() {
       const res = await api.get<SalesInvoice>(`/sales/invoices/${inv.id}`);
       setViewInvoice(res.data);
       setViewOpen(true);
+      try {
+        const qr = await api.get(`/sales/invoices/${inv.id}/qr`, { responseType: 'blob' });
+        const url = URL.createObjectURL(qr.data);
+        setQrSrc((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
+      } catch { setQrSrc(null); }
     } catch {
       setError('Failed to load invoice');
     } finally {
@@ -692,8 +698,9 @@ export default function SalesInvoicesPage() {
 
       <DocumentViewDialog
         open={viewOpen}
-        onClose={() => { setViewOpen(false); setViewInvoice(null); }}
+        onClose={() => { setViewOpen(false); setViewInvoice(null); if (qrSrc) URL.revokeObjectURL(qrSrc); setQrSrc(null); }}
         title="Sales Invoice"
+        qrSrc={qrSrc}
         extraFields={[
           ...(viewInvoice?.dueDate ? [{ label: 'Due Date', value: formatDateDDMMYYYY(viewInvoice.dueDate) }] : []),
           ...(D(viewInvoice?.customer?.creditDays).gt(0) ? [{ label: 'Credit Days', value: String(viewInvoice?.customer?.creditDays) }] : []),

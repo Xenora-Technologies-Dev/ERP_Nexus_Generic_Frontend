@@ -1,23 +1,31 @@
-import { money } from '../../utils/money';
 import { useEffect, useState, FormEvent } from 'react';
 import {
   Box, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button,
   Alert, CircularProgress, Grid, Autocomplete, IconButton,
 } from '@mui/material';
 import { GridColDef } from '@mui/x-data-grid';
-import { SwapHoriz } from '@mui/icons-material';
-import { api } from '../../api/client';
+import { SwapHoriz, Visibility, PictureAsPdf } from '@mui/icons-material';
+import { api, displayDocumentNumber, pdfFilename } from '../../api/client';
 import PageHeader from '../../components/common/PageHeader';
 import DocumentTable, { StatusChip } from '../../components/common/DocumentTable';
 import LineItemsForm, { LineItem } from '../../components/common/LineItemsForm';
 import DocumentDateField from '../../components/common/DocumentDateField';
+import DocumentViewDialog from '../../components/common/DocumentViewDialog';
+import { money, qtyOut } from '../../utils/money';
 import { todayISO, formatDateDDMMYYYY } from '../../utils/date';
 
 interface Customer { id: string; name: string; code: string; }
-interface Product { id: string; name: string; sku: string; sellingPrice: number; vatRate: number; unit?: string; }
+interface Product { id: string; name: string; sku: string; sellingPrice: number; vatRate: number; unit?: string; packing?: string | null; }
+interface QuoteItem {
+  description?: string; quantity: number; unitPrice: number; vatRate: number;
+  vatAmount?: number; total: number;
+  product?: Product;
+}
 interface Quotation {
   id: string; documentNumber: string; date: string; status: string;
-  customer: Customer; total: number; vatApplicable: boolean;
+  customer: Customer & { address?: string | null; vatNumber?: string | null; phone?: string | null; email?: string | null };
+  total: number; subtotal?: number; vatAmount?: number; vatApplicable: boolean; notes?: string | null;
+  items?: QuoteItem[];
 }
 
 export default function QuotationsPage() {
@@ -35,6 +43,9 @@ export default function QuotationsPage() {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [converting, setConverting] = useState<string | null>(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewQuote, setViewQuote] = useState<Quotation | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -48,7 +59,7 @@ export default function QuotationsPage() {
       setCustomers(c.data);
       setProducts(p.data.map((pr) => ({
         id: pr.id, name: pr.name, sku: pr.sku,
-        sellingPrice: money(pr.sellingPrice), vatRate: money(pr.vatRate), unit: pr.unit,
+        sellingPrice: money(pr.sellingPrice), vatRate: money(pr.vatRate), unit: pr.unit, packing: pr.packing,
       })));
     } catch {
       setError('Failed to load quotations');
@@ -100,6 +111,36 @@ export default function QuotationsPage() {
     }
   };
 
+  const openView = async (q: Quotation) => {
+    setPdfBusy(true);
+    try {
+      const res = await api.get<Quotation>(`/sales/quotations/${q.id}`);
+      setViewQuote(res.data);
+      setViewOpen(true);
+    } catch {
+      setError('Failed to load quotation');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
+  const downloadPdf = async (q: Quotation) => {
+    setPdfBusy(true);
+    try {
+      const res = await api.get(`/sales/quotations/${q.id}/pdf`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = pdfFilename(q.customer?.name || 'Customer', q.documentNumber);
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('Failed to download quotation PDF');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   const columns: GridColDef[] = [
     { field: 'documentNumber', headerName: 'Number', width: 140 },
     { field: 'date', headerName: 'Date', width: 110, valueFormatter: (v) => formatDateDDMMYYYY(v as string) },
@@ -107,15 +148,22 @@ export default function QuotationsPage() {
     { field: 'total', headerName: 'Total', width: 110, type: 'number' },
     { field: 'status', headerName: 'Status', width: 120, renderCell: ({ value }) => <StatusChip status={value as string} /> },
     {
-      field: 'actions', headerName: 'Actions', width: 80, sortable: false,
+      field: 'actions', headerName: 'Actions', width: 150, sortable: false,
       renderCell: ({ row }) => {
         const q = row as Quotation;
-        if (q.status === 'CONVERTED') return null;
         return (
-          <IconButton size="small" title="Convert to Order" disabled={converting === q.id}
-            onClick={() => convertToOrder(q.id)}>
-            {converting === q.id ? <CircularProgress size={18} /> : <SwapHoriz fontSize="small" />}
-          </IconButton>
+          <Box>
+            <IconButton size="small" title="View" onClick={() => openView(q)}><Visibility fontSize="small" /></IconButton>
+            <IconButton size="small" title="Download PDF" onClick={() => downloadPdf(q)}>
+              <PictureAsPdf fontSize="small" color="error" />
+            </IconButton>
+            {q.status !== 'CONVERTED' && q.status !== 'CANCELLED' && (
+              <IconButton size="small" title="Convert to Order" disabled={converting === q.id}
+                onClick={() => convertToOrder(q.id)}>
+                {converting === q.id ? <CircularProgress size={18} /> : <SwapHoriz fontSize="small" />}
+              </IconButton>
+            )}
+          </Box>
         );
       },
     },
@@ -164,6 +212,40 @@ export default function QuotationsPage() {
           </DialogActions>
         </form>
       </Dialog>
+
+      <DocumentViewDialog
+        open={viewOpen}
+        busy={pdfBusy}
+        onClose={() => { setViewOpen(false); setViewQuote(null); }}
+        title="Quotation"
+        onDownload={viewQuote ? () => downloadPdf(viewQuote) : undefined}
+        document={viewQuote ? {
+          documentNumber: displayDocumentNumber(viewQuote.documentNumber),
+          date: viewQuote.date,
+          status: viewQuote.status,
+          notes: viewQuote.notes,
+          partyName: viewQuote.customer?.name,
+          partyLabel: 'Customer',
+          partyAddress: viewQuote.customer?.address,
+          partyVatNumber: viewQuote.customer?.vatNumber,
+          partyPhone: viewQuote.customer?.phone,
+          partyEmail: viewQuote.customer?.email,
+          vatApplicable: viewQuote.vatApplicable,
+          subtotal: viewQuote.subtotal != null ? money(viewQuote.subtotal) : undefined,
+          vatAmount: viewQuote.vatAmount != null ? money(viewQuote.vatAmount) : undefined,
+          total: money(viewQuote.total),
+          items: (viewQuote.items || []).map((i) => ({
+            description: i.description || i.product?.name,
+            quantity: qtyOut(i.quantity),
+            unit: i.product?.unit,
+            unitPrice: money(i.unitPrice),
+            vatRate: money(i.vatRate),
+            vatAmount: i.vatAmount != null ? money(i.vatAmount) : undefined,
+            total: money(i.total),
+            product: i.product,
+          })),
+        } : null}
+      />
     </Box>
   );
 }

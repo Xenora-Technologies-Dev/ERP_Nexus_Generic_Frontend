@@ -54,8 +54,10 @@ export default function EInvoicingPage() {
 
   return (
     <Box>
-      <PageHeader title="E-Invoicing (PINT AE)" subtitle="Generate, validate and submit UBL e-invoices through your Accredited Service Provider" />
-      <Alert severity="info" sx={{ mb: 2 }}>The ASP connection is set on the server (EINVOICE_ASP). The default is a mock provider that does not send anything externally.</Alert>
+      <PageHeader title="E-Invoicing (PINT AE)" subtitle="Current e-invoicing workspace. Live Accredited Service Provider integration will be connected soon." />
+      <Alert severity="info" sx={{ mb: 2 }}>
+        This is the current version: validate a document and download its UBL XML. Submission uses the server’s current provider and does not file with the FTA. The real integration will be added soon.
+      </Alert>
       {msg && <Alert severity={msg.type} sx={{ mb: 2 }} onClose={() => setMsg(null)}>{msg.text}</Alert>}
       <Paper sx={{ p: 2, mb: 2 }}>
         <TextField select size="small" label="Document type" value={kind} onChange={(e) => setKind(e.target.value as 'invoice' | 'credit-note')} sx={{ mb: 2, minWidth: 200 }}>

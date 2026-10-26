@@ -35,6 +35,7 @@ interface Product {
   costPrice?: number;
   vatRate: number;
   unit?: string;
+  packing?: string | null;
   countryOfOrigin?: string | null;
   taxCode?: string | null;
 }
@@ -163,6 +164,8 @@ export default function LineItemsForm({
           <TableHead>
             <TableRow>
               <TableCell>Product</TableCell>
+              <TableCell>Item Code</TableCell>
+              <TableCell>Packing</TableCell>
               <TableCell align="center">UOM</TableCell>
               <TableCell align="right">Qty</TableCell>
               {showCost && <TableCell align="right">Purchase Cost</TableCell>}
@@ -190,6 +193,8 @@ export default function LineItemsForm({
                       renderInput={(params) => <TextField {...params} placeholder="Select product" />}
                     />
                   </TableCell>
+                  <TableCell>{product?.sku || '-'}</TableCell>
+                  <TableCell>{product?.packing || '-'}</TableCell>
                   <TableCell align="center">{product?.unit || item.unit || '-'}</TableCell>
                   <TableCell align="right">
                     <NumberField value={item.quantity} onChange={(v) => updateItem(i, 'quantity', v)} />

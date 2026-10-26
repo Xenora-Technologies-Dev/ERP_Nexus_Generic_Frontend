@@ -18,7 +18,7 @@ import DocumentViewDialog from '../../components/common/DocumentViewDialog';
 interface Customer { id: string; name: string; code: string; address?: string | null; vatNumber?: string | null; phone?: string | null; email?: string | null; }
 interface Product {
   id: string; name: string; sku: string; sellingPrice: number;
-  costPrice?: number; vatRate: number; unit?: string; countryOfOrigin?: string | null;
+  costPrice?: number; vatRate: number; unit?: string; packing?: string | null; countryOfOrigin?: string | null;
 }
 interface Warehouse { id: string; name: string; code: string; }
 interface SalesOrderItem {
@@ -95,7 +95,7 @@ export default function SalesOrdersPage() {
       setCustomers(c.data);
       setProducts(p.data.map((pr) => ({
         id: pr.id, name: pr.name, sku: pr.sku,
-        sellingPrice: money(pr.sellingPrice), costPrice: money(pr.costPrice),
+        sellingPrice: money(pr.sellingPrice), costPrice: money(pr.costPrice), packing: pr.packing,
         vatRate: money(pr.vatRate), unit: pr.unit, countryOfOrigin: pr.countryOfOrigin,
       })));
       setWarehouses(w.data);
@@ -139,6 +139,7 @@ export default function SalesOrdersPage() {
       setVatApplicable(full.vatApplicable);
       setNotes(full.notes || '');
       setItems((full.items || []).map((i) => ({
+        id: i.id,
         productId: i.productId,
         productName: i.product?.name,
         quantity: qtyOut(i.quantity),
@@ -177,7 +178,7 @@ export default function SalesOrdersPage() {
       customerId, date, reference: reference || null, remarks: remarks || null,
       vatApplicable, discount, notes,
       items: items.filter((i) => i.productId).map((i) => ({
-        productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice, vatRate: i.vatRate, taxCode: i.taxCode || undefined,
+        id: i.id, productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice, vatRate: i.vatRate, taxCode: i.taxCode || undefined,
       })),
     };
     try {
@@ -320,8 +321,8 @@ export default function SalesOrdersPage() {
     }
   };
 
-  const canEdit = (status: string) => status === 'DRAFT';
-  const canDelete = (status: string) => ['DRAFT', 'CANCELLED'].includes(status);
+  const canEdit = (status: string) => ['DRAFT', 'CONFIRMED', 'PARTIALLY_DELIVERED'].includes(status);
+  const canDelete = (status: string) => ['DRAFT', 'CANCELLED', 'CONFIRMED'].includes(status);
   const canApprove = (status: string) => status === 'DRAFT';
   /** Show truck only while approved/partial and qty remains (confirmed + draft DNs counted). */
   const canDeliver = (order: SalesOrder) => {

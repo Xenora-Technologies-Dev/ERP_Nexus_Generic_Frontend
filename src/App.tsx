@@ -16,6 +16,7 @@ const PosPage = lazy(() => import('./pages/pos/PosPage'));
 const CorporateTaxPage = lazy(() => import('./pages/tax/CorporateTaxPage'));
 const EInvoicingPage = lazy(() => import('./pages/tax/EInvoicingPage'));
 const QuotationsPage = lazy(() => import('./pages/sales/QuotationsPage'));
+const ProformaInvoicesPage = lazy(() => import('./pages/sales/ProformaInvoicesPage'));
 const SalesOrdersPage = lazy(() => import('./pages/sales/SalesOrdersPage'));
 const DeliveryNotesPage = lazy(() => import('./pages/sales/DeliveryNotesPage'));
 const SalesInvoicesPage = lazy(() => import('./pages/sales/SalesInvoicesPage'));
@@ -102,6 +103,7 @@ export default function App() {
         <Route path="tax/corporate" element={<CorporateTaxPage />} />
         <Route path="tax/einvoicing" element={<EInvoicingPage />} />
         <Route path="sales/quotations" element={<QuotationsPage />} />
+        <Route path="sales/proformas" element={<ProformaInvoicesPage />} />
         <Route path="sales/orders" element={<SalesOrdersPage />} />
         <Route path="sales/delivery-notes" element={<DeliveryNotesPage />} />
         <Route path="sales/invoices" element={<SalesInvoicesPage />} />

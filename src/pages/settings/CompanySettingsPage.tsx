@@ -34,6 +34,7 @@ interface CompanySettings {
   timezone: string;
   financialYearStart: number;
   quotationPrefix: string;
+  proformaPrefix: string;
   salesOrderPrefix: string;
   deliveryNotePrefix: string;
   salesInvoicePrefix: string;
@@ -66,7 +67,7 @@ const emptySettings: CompanySettings = {
   city: '', state: '', country: 'UAE', postalCode: '', phone: '', email: '', website: '',
   bankName: '', bankAccountNumber: '', bankIban: '', bankSwiftCode: '',
   defaultCurrency: 'AED', timezone: 'Asia/Dubai', financialYearStart: 1,
-  quotationPrefix: 'QT', salesOrderPrefix: 'SO', deliveryNotePrefix: 'DN',
+  quotationPrefix: 'QT', proformaPrefix: 'PFI', salesOrderPrefix: 'SO', deliveryNotePrefix: 'DN',
   salesInvoicePrefix: 'SI', creditNotePrefix: 'CRN', purchaseOrderPrefix: 'PO',
   grnPrefix: 'GRN', purchaseInvoicePrefix: 'PI', debitNotePrefix: 'DBN',
   salesReturnPrefix: 'SR', purchaseReturnPrefix: 'PR',
@@ -411,7 +412,7 @@ export default function CompanySettingsPage() {
                 </Grid>
                 <Grid container spacing={2}>
                   {([
-                    ['quotationPrefix', 'Quotation'], ['salesOrderPrefix', 'Sales Order'],
+                    ['quotationPrefix', 'Quotation'], ['proformaPrefix', 'Proforma Invoice'], ['salesOrderPrefix', 'Sales Order'],
                     ['deliveryNotePrefix', 'Delivery Note'], ['salesInvoicePrefix', 'Sales Invoice'],
                     ['purchaseInvoicePrefix', 'Purchase Invoice'], ['expensePrefix', 'Expense'],
                     ['creditNotePrefix', 'Credit Note'], ['salesReturnPrefix', 'Sales Return'],
