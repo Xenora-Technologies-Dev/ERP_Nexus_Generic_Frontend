@@ -7,7 +7,7 @@ import {
 import { Save, Upload, Delete, Business } from '@mui/icons-material';
 import { api, getLogoUrl } from '../../api/client';
 import PageHeader from '../../components/common/PageHeader';
-import { EMIRATES, isValidTrn } from '../../utils/uae';
+import { EMIRATES, isValidTrn, UAE_TRN_HINT } from '../../utils/uae';
 
 interface CompanySettings {
   id?: string;
@@ -237,7 +237,9 @@ export default function CompanySettingsPage() {
                   <Grid item xs={12} sm={6}>
                     <TextField fullWidth label="TRN (VAT Registration)" value={form.vatRegistrationNumber}
                       error={Boolean(form.vatRegistrationNumber) && !isValidTrn(form.vatRegistrationNumber)}
-                      helperText={Boolean(form.vatRegistrationNumber) && !isValidTrn(form.vatRegistrationNumber) ? 'TRN must be 15 digits starting with 100' : undefined}
+                      helperText={Boolean(form.vatRegistrationNumber) && !isValidTrn(form.vatRegistrationNumber)
+                        ? `TRN must be ${UAE_TRN_HINT}`
+                        : `${UAE_TRN_HINT}. Leave blank if the company is not VAT-registered.`}
                       onChange={(e) => update('vatRegistrationNumber', e.target.value)} />
                     <TextField select fullWidth label="Emirate of establishment" value={form.emirate || ''} sx={{ mt: 2 }}
                       helperText="Default place of supply for VAT 201 boxes 1a-1g"

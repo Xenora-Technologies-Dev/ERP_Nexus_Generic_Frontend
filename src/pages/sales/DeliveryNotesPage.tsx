@@ -14,6 +14,7 @@ import DocumentTable, { StatusChip } from '../../components/common/DocumentTable
 import { NumberField } from '../../components/common/LineItemsForm';
 import DocumentDateField from '../../components/common/DocumentDateField';
 import DocumentViewDialog from '../../components/common/DocumentViewDialog';
+import CustomerCopyPrompt from '../../components/common/CustomerCopyPrompt';
 import { formatDateDDMMYYYY, toInputDate, todayISO } from '../../utils/date';
 
 interface Warehouse { id: string; name: string; code: string; }
@@ -129,13 +130,6 @@ const printPdf = async (id: string) => {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 };
 
-const downloadDnWithCustomerCopyPrompt = async (id: string, docNumber: string, partyName: string) => {
-  await downloadPdf(id, docNumber, partyName, false);
-  if (window.confirm('Do you want Customer Copy?')) {
-    await downloadPdf(id, docNumber, partyName, true);
-  }
-};
-
 function productLabel(p: Product) {
   const base = `${p.sku} - ${p.name}`;
   return p.countryOfOrigin ? `${base} (${p.countryOfOrigin})` : base;
@@ -182,6 +176,7 @@ export default function DeliveryNotesPage() {
   const [createCheckedBy, setCreateCheckedBy] = useState('');
   const [createNotes, setCreateNotes] = useState('');
   const [directLines, setDirectLines] = useState<DirectLine[]>([{ productId: '', quantity: 1, unitPrice: 0 }]);
+  const [copyTarget, setCopyTarget] = useState<DeliveryNote | null>(null);
 
   const qtyEditable = editingNote?.status === 'DRAFT';
   const isDirectEdit = !!editingNote && !editingNote.salesOrderId;
@@ -385,15 +380,20 @@ export default function DeliveryNotesPage() {
     }
   };
 
-  const handleDownload = async (note: DeliveryNote) => {
+  const handleDownload = (note: DeliveryNote) => {
+    setCopyTarget(note);
+  };
+
+  const confirmCopyDownload = async (includeCustomerCopy: boolean) => {
+    if (!copyTarget) return;
     setPdfBusy(true);
-    setActionId(note.id);
+    setActionId(copyTarget.id);
     try {
-      await downloadDnWithCustomerCopyPrompt(
-        note.id,
-        displayDocumentNumber(note.documentNumber),
-        note.customer?.name || 'Customer',
-      );
+      const docNumber = displayDocumentNumber(copyTarget.documentNumber);
+      const partyName = copyTarget.customer?.name || 'Customer';
+      await downloadPdf(copyTarget.id, docNumber, partyName, false);
+      if (includeCustomerCopy) await downloadPdf(copyTarget.id, docNumber, partyName, true);
+      setCopyTarget(null);
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message;
       setError(msg || 'Failed to download PDF');
@@ -867,6 +867,14 @@ export default function DeliveryNotesPage() {
           </DialogActions>
         </form>
       </Dialog>
+
+      <CustomerCopyPrompt
+        open={!!copyTarget}
+        documentLabel="delivery note"
+        busy={pdfBusy}
+        onClose={() => { if (!pdfBusy) setCopyTarget(null); }}
+        onConfirm={(include) => { void confirmCopyDownload(include); }}
+      />
 
       <DocumentViewDialog
         open={viewOpen}

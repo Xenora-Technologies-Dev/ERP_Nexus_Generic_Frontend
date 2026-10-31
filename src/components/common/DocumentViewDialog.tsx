@@ -107,6 +107,17 @@ export default function DocumentViewDialog({
           </Grid>
           <Grid item xs={12} sm={6}>
             <Box sx={{ textAlign: { sm: 'right' } }}>
+              {qrSrc && (
+                <Box sx={{ mb: 1.5, display: 'flex', flexDirection: 'column', alignItems: { xs: 'flex-start', sm: 'flex-end' } }}>
+                  <Box
+                    component="img"
+                    src={qrSrc}
+                    alt="Invoice verification QR"
+                    sx={{ width: 88, height: 88, p: 0.5, border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: '#fff' }}
+                  />
+                  <Typography variant="caption" color="text.secondary">Scan to verify</Typography>
+                </Box>
+              )}
               <Typography variant="caption" color="text.secondary">Date</Typography>
               <Typography variant="body2">{formatDate(document.date)}</Typography>
               <Box sx={{ mt: 1 }}>
@@ -128,12 +139,6 @@ export default function DocumentViewDialog({
               {document.status && (
                 <Box sx={{ mt: 1, display: 'flex', justifyContent: { sm: 'flex-end' } }}>
                   <StatusChip status={document.status} />
-                </Box>
-              )}
-              {qrSrc && (
-                <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', alignItems: { sm: 'flex-end' } }}>
-                  <Box component="img" src={qrSrc} alt="Invoice verification QR" sx={{ width: 96, height: 96 }} />
-                  <Typography variant="caption" color="text.secondary">Scan to verify</Typography>
                 </Box>
               )}
             </Box>

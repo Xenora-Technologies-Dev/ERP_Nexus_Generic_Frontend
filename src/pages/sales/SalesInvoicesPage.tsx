@@ -14,6 +14,7 @@ import DocumentTable, { StatusChip } from '../../components/common/DocumentTable
 import DocumentViewDialog from '../../components/common/DocumentViewDialog';
 import LineItemsForm, { LineItem, NumberField } from '../../components/common/LineItemsForm';
 import DocumentDateField from '../../components/common/DocumentDateField';
+import CustomerCopyPrompt from '../../components/common/CustomerCopyPrompt';
 import { todayISO, toInputDate, formatDateDDMMYYYY } from '../../utils/date';
 
 function dueDateFromCreditDays(invoiceDateIso: string, creditDays?: number | null): string {
@@ -80,13 +81,6 @@ const downloadPdf = async (id: string, partyName: string, docNumber: string, cus
   URL.revokeObjectURL(url);
 };
 
-const downloadInvoiceWithCustomerCopyPrompt = async (id: string, partyName: string, docNumber: string) => {
-  await downloadPdf(id, partyName, docNumber, false);
-  if (window.confirm('Do you want Customer Copy?')) {
-    await downloadPdf(id, partyName, docNumber, true);
-  }
-};
-
 export default function SalesInvoicesPage() {
   const { user } = useAuth();
   const isAdmin = !!user?.permissions?.includes('system.admin');
@@ -131,6 +125,7 @@ export default function SalesInvoicesPage() {
   const [deleteTarget, setDeleteTarget] = useState<SalesInvoice | null>(null);
   const [deleteRemarks, setDeleteRemarks] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [copyPrompt, setCopyPrompt] = useState<{ id: string; partyName: string; docNumber: string } | null>(null);
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -353,6 +348,22 @@ export default function SalesInvoicesPage() {
     }
   };
 
+  const confirmCopyDownload = async (includeCustomerCopy: boolean) => {
+    if (!copyPrompt) return;
+    setActionId(copyPrompt.id);
+    try {
+      await downloadPdf(copyPrompt.id, copyPrompt.partyName, copyPrompt.docNumber, false);
+      if (includeCustomerCopy) {
+        await downloadPdf(copyPrompt.id, copyPrompt.partyName, copyPrompt.docNumber, true);
+      }
+      setCopyPrompt(null);
+    } catch {
+      setError('PDF download failed');
+    } finally {
+      setActionId(null);
+    }
+  };
+
   const canDeleteInvoice = (inv: SalesInvoice) =>
     ['DRAFT', 'CONFIRMED'].includes(inv.status) && !(D(inv.paidAmount).gt(0));
 
@@ -406,7 +417,7 @@ export default function SalesInvoicesPage() {
     { field: 'total', headerName: 'Total', width: 110, type: 'number' },
     { field: 'status', headerName: 'Status', width: 130, renderCell: ({ value }) => <StatusChip status={value as string} /> },
     {
-      field: 'actions', headerName: 'Actions', width: 200, sortable: false,
+      field: 'actions', headerName: 'Actions', width: 230, sortable: false,
       renderCell: ({ row }) => {
         const inv = row as SalesInvoice;
         const busy = actionId === inv.id;
@@ -426,11 +437,8 @@ export default function SalesInvoicesPage() {
             <IconButton size="small" title="View" disabled={busy} onClick={() => openView(inv)}>
               {busy ? <CircularProgress size={16} /> : <Visibility fontSize="small" />}
             </IconButton>
-            <IconButton size="small" title="Download PDF" onClick={async () => {
-              setActionId(inv.id);
-              try { await downloadInvoiceWithCustomerCopyPrompt(inv.id, inv.customer.name, inv.documentNumber); }
-              catch { setError('PDF download failed'); }
-              finally { setActionId(null); }
+            <IconButton size="small" title="Download PDF" disabled={busy} onClick={() => {
+              setCopyPrompt({ id: inv.id, partyName: inv.customer.name, docNumber: inv.documentNumber });
             }}>
               <PictureAsPdf fontSize="small" color="error" />
             </IconButton>
@@ -446,12 +454,17 @@ export default function SalesInvoicesPage() {
     },
   ];
 
-  const displayPreview = preview ? {
+  const pricedPreview = preview ? previewDocument(preview.items, editVat, editDiscount) : null;
+  const displayPreview = preview && pricedPreview ? {
     ...preview,
-    discount: editDiscount,
+    discount: pricedPreview.discount,
     notes: editNotes,
     vatApplicable: editVat,
-    ...(({ vatAmount, total }) => ({ vatAmount, total }))(previewDocument(preview.items, editVat, editDiscount)),
+    subtotal: pricedPreview.subtotal,
+    vatAmount: pricedPreview.vatAmount,
+    total: pricedPreview.total,
+    linePrices: pricedPreview.lines,
+    discountExceedsSubtotal: pricedPreview.discountExceedsSubtotal,
   } : null;
 
   return (
@@ -565,15 +578,20 @@ export default function SalesInvoicesPage() {
                 </Grid>
                 <Grid item xs={6} sm={3}>
                   <TextField fullWidth label="Currency" value={currency} inputProps={{ maxLength: 3 }}
-                    onChange={(e) => setCurrency(e.target.value.toUpperCase())} helperText="AED = base" />
+                    onChange={(e) => setCurrency(e.target.value.toUpperCase())} helperText="AED unless this invoice is in another currency" />
                 </Grid>
                 {currency !== 'AED' && (
                   <Grid item xs={6} sm={3}>
                     <TextField fullWidth label="Rate (AED per 1)" type="number" value={fxRate}
-                      onChange={(e) => setFxRate(e.target.value)} helperText="Blank = rate table" />
+                      onChange={(e) => setFxRate(e.target.value)} helperText="Leave blank to use the exchange-rate table" />
                   </Grid>
                 )}
               </Grid>
+              {displayPreview.discountExceedsSubtotal && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  Discount cannot be larger than the subtotal ({fmtMoney(displayPreview.subtotal)}). Reduce it before creating the invoice.
+                </Alert>
+              )}
               <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
                 <Table size="small">
                   <TableHead>
@@ -581,27 +599,34 @@ export default function SalesInvoicesPage() {
                       <TableCell>Description</TableCell><TableCell align="center">UOM</TableCell>
                       <TableCell align="right">Qty</TableCell><TableCell align="right">Price</TableCell>
                       <TableCell align="right">Value</TableCell>
+                      {editVat && <TableCell align="right">VAT</TableCell>}
                       <TableCell align="right">Total</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {displayPreview.items.map((item, i) => (
-                      <TableRow key={i}>
-                        <TableCell>{item.description}</TableCell>
-                        <TableCell align="center">{item.unit || '-'}</TableCell>
-                        <TableCell align="right">{fmtMoney(item.quantity)}</TableCell>
-                        <TableCell align="right">{fmtMoney(item.unitPrice)}</TableCell>
-                        <TableCell align="right">{fmtMoney(lineNet(item))}</TableCell>
-                        <TableCell align="right">{fmtMoney(item.total)}</TableCell>
-                      </TableRow>
-                    ))}
+                    {displayPreview.items.map((item, i) => {
+                      const line = displayPreview.linePrices[i];
+                      return (
+                        <TableRow key={i}>
+                          <TableCell>{item.description}</TableCell>
+                          <TableCell align="center">{item.unit || '-'}</TableCell>
+                          <TableCell align="right">{fmtMoney(item.quantity)}</TableCell>
+                          <TableCell align="right">{fmtMoney(item.unitPrice)}</TableCell>
+                          <TableCell align="right">{fmtMoney(line?.net ?? lineNet(item))}</TableCell>
+                          {editVat && <TableCell align="right">{fmtMoney(line?.vat ?? 0)}</TableCell>}
+                          <TableCell align="right">{fmtMoney(line?.total ?? item.total)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>
               <Box sx={{ textAlign: 'right' }}>
                 <Typography>Subtotal: {fmtMoney(displayPreview.subtotal)}</Typography>
                 {displayPreview.vatApplicable && <Typography>VAT: {fmtMoney(displayPreview.vatAmount)}</Typography>}
-                {editDiscount > 0 && <Typography>Discount: -{fmtMoney(editDiscount)}</Typography>}
+                {editDiscount > 0 && !displayPreview.discountExceedsSubtotal && (
+                  <Typography>Discount: -{fmtMoney(displayPreview.discount)}</Typography>
+                )}
                 <Typography variant="subtitle1" fontWeight={700}>Total: {fmtMoney(displayPreview.total)}</Typography>
               </Box>
             </Box>
@@ -609,7 +634,7 @@ export default function SalesInvoicesPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreateOpen(false)}>Cancel</Button>
-          <Button variant="contained" disabled={!preview || saving} onClick={handleConfirm}>
+          <Button variant="contained" disabled={!preview || saving || !!displayPreview?.discountExceedsSubtotal} onClick={handleConfirm}>
             {saving ? <CircularProgress size={20} /> : 'Confirm & Create Invoice'}
           </Button>
         </DialogActions>
@@ -733,6 +758,14 @@ export default function SalesInvoicesPage() {
             product: i.product,
           })),
         } : null}
+      />
+
+      <CustomerCopyPrompt
+        open={!!copyPrompt}
+        documentLabel="invoice"
+        busy={!!copyPrompt && actionId === copyPrompt.id}
+        onClose={() => { if (!(copyPrompt && actionId === copyPrompt.id)) setCopyPrompt(null); }}
+        onConfirm={(include) => { void confirmCopyDownload(include); }}
       />
 
       <Dialog open={!!deleteTarget} onClose={() => !deleting && setDeleteTarget(null)} maxWidth="sm" fullWidth>

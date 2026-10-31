@@ -9,7 +9,7 @@ import { GridColDef } from '@mui/x-data-grid';
 import { Edit, Delete } from '@mui/icons-material';
 import { api } from '../../api/client';
 import { apiError } from '../../utils/apiError';
-import { EMIRATES, isValidTrn } from '../../utils/uae';
+import { EMIRATES, isValidTrn, UAE_TRN_HINT } from '../../utils/uae';
 import PageHeader from '../../components/common/PageHeader';
 import DocumentTable from '../../components/common/DocumentTable';
 
@@ -192,7 +192,11 @@ export default function CustomersPage() {
               <Grid item xs={12} sm={6}>
                 <TextField fullWidth label={form.isForeign ? 'Tax / VAT ID' : 'TRN (15 digits)'} value={form.vatNumber}
                   error={Boolean(form.vatNumber) && !form.isForeign && !isValidTrn(form.vatNumber)}
-                  helperText={Boolean(form.vatNumber) && !form.isForeign && !isValidTrn(form.vatNumber) ? 'UAE TRN must be 15 digits starting with 100' : ' '}
+                  helperText={form.isForeign
+                    ? 'Foreign tax ID — the UAE TRN format does not apply'
+                    : Boolean(form.vatNumber) && !isValidTrn(form.vatNumber)
+                      ? `UAE TRN must be ${UAE_TRN_HINT}`
+                      : UAE_TRN_HINT}
                   onChange={(e) => setForm({ ...form, vatNumber: e.target.value })} />
               </Grid>
               <Grid item xs={12} sm={6}>

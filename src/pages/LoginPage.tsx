@@ -27,9 +27,14 @@ export default function LoginPage() {
       await login(username, password, mfaRequired ? totp : undefined);
       navigate('/');
     } catch (err: unknown) {
-      const data = (err as { response?: { data?: { error?: string; mfaRequired?: boolean } } })?.response?.data;
+      const response = (err as { response?: { data?: { error?: string; mfaRequired?: boolean } } })?.response;
+      const data = response?.data;
       if (data?.mfaRequired) setMfaRequired(true);
-      setError(data?.mfaRequired && !totp ? 'Enter the 6-digit code from your authenticator app' : data?.error || 'Invalid username or password');
+      if (!response) {
+        setError('Cannot reach the API. Confirm the site was built with VITE_API_URL set to the Render API, ending in /api.');
+      } else {
+        setError(data?.mfaRequired && !totp ? 'Enter the 6-digit code from your authenticator app' : data?.error || 'Invalid username or password');
+      }
     } finally {
       setLoading(false);
     }

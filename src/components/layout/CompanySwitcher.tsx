@@ -53,7 +53,7 @@ export default function CompanySwitcher() {
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           <TextField fullWidth margin="dense" label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
           <TextField fullWidth margin="dense" label="Legal name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <TextField fullWidth margin="dense" label="TRN (15 digits, optional)" value={form.trn} onChange={(e) => setForm({ ...form, trn: e.target.value })} />
+          <TextField fullWidth margin="dense" label="TRN (15 digits starting with 10, optional)" value={form.trn} onChange={(e) => setForm({ ...form, trn: e.target.value })} helperText="Leave blank if the company is not VAT-registered" />
           <Alert severity="info" sx={{ mt: 1 }}>Chart of accounts, templates and settings are copied from the current company. No business data is copied.</Alert>
         </DialogContent>
         <DialogActions>

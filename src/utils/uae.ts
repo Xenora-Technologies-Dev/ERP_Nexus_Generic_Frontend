@@ -8,9 +8,11 @@ export const EMIRATES = [
   { value: 'FUJAIRAH', label: 'Fujairah' },
 ] as const;
 
-/** UAE TRN: 15 digits starting with 100 (spaces / dashes ignored). */
+/** UAE TRN: 15 digits starting with 10 (spaces and dashes ignored). Older numbers that start with 100 still pass. */
+export const UAE_TRN_HINT = '15 digits starting with 10';
+
 export function isValidTrn(v: string): boolean {
-  return /^100\d{12}$/.test(v.replace(/[\s-]/g, ''));
+  return /^10\d{13}$/.test(v.replace(/[\s-]/g, ''));
 }
 
 export const TAX_CODE_OPTIONS = [
