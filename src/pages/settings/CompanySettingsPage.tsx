@@ -191,7 +191,7 @@ export default function CompanySettingsPage() {
                 <Box sx={{ textAlign: 'center', mb: 2 }}>
                   <Box sx={{ border: '2px dashed', borderColor: 'divider', borderRadius: 2, p: 2, mb: 2 }}>
                     <img src={logoPreview} alt="Company Logo"
-                      style={{ maxWidth: '100%', maxHeight: 120, objectFit: 'contain' }} />
+                      style={{ maxWidth: '100%', maxHeight: 180, objectFit: 'contain' }} />
                   </Box>
                   <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
                     {hasCustomLogo ? 'Uploaded logo' : 'Default logo'}

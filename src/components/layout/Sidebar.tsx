@@ -138,7 +138,7 @@ export default function Sidebar({ open, onClose }: Props) {
   const drawer = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Box sx={{ p: 2, textAlign: 'center', bgcolor: brandColors.darkGreen }}>
-        <img src="/default-logo.png" alt="Logo" style={{ maxWidth: 140, maxHeight: 60, marginBottom: 4 }} />
+        <img src="/default-logo.png" alt="LAFA General Trading" style={{ width: '100%', maxWidth: 200, maxHeight: 148, objectFit: 'contain', marginBottom: 4 }} />
         <Typography variant="subtitle2" sx={{ color: 'white', fontWeight: 700 }}>{APP_NAME}</Typography>
         <Typography variant="caption" sx={{ color: brandColors.goldenTan }}>Version {APP_VERSION}</Typography>
       </Box>

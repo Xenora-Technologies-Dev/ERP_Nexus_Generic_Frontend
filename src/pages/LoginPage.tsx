@@ -48,7 +48,7 @@ export default function LoginPage() {
       <Card sx={{ maxWidth: 420, width: '100%' }}>
         <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
           <Box sx={{ textAlign: 'center', mb: 3 }}>
-            <img src="/default-logo.png" alt="Logo" style={{ maxWidth: 160, maxHeight: 70, marginBottom: 12 }} />
+            <img src="/default-logo.png" alt="LAFA General Trading" style={{ width: '100%', maxWidth: 240, maxHeight: 180, objectFit: 'contain', marginBottom: 12 }} />
             <Typography variant="h5" fontWeight={700} color={brandColors.darkGreen}>{APP_NAME}</Typography>
             <Typography variant="body2" color="text.secondary">Sign in with your username and password</Typography>
           </Box>
