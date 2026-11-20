@@ -2,10 +2,11 @@ import { fmtMoney, money, parseInput, previewDocument } from '../../utils/money'
 import { useState, useEffect } from 'react';
 import {
   Box, Table, TableHead, TableBody, TableRow, TableCell, TableContainer,
-  IconButton, TextField, Autocomplete, Button, FormControlLabel, Checkbox, Paper, Typography,
+  IconButton, TextField, Autocomplete, Button, FormControlLabel, Checkbox, Paper, Typography, Alert,
 } from '@mui/material';
 import { Delete, Add } from '@mui/icons-material';
-import { TAX_CODE_OPTIONS } from '../../utils/uae';
+import { TAX_CODE_OPTIONS, UNREGISTERED_TAX_CODES } from '../../utils/uae';
+import { useCompanyVatSettings } from '../../utils/useVatRegistration';
 
 /** Charged VAT % shown in the preview for a tax code (RC/IMP are self-assessed, not charged). */
 export function chargedRate(taxCode: string | undefined, productRate: number): number {
@@ -101,17 +102,50 @@ interface Props {
   onDiscountChange?: (v: number) => void;
   /** Which side's tax codes to offer (RC/IMP are purchase-only). Defaults from priceField. */
   taxSide?: 'SALES' | 'PURCHASE';
+  /** Document date (YYYY-MM-DD). VAT registration is judged on this date. */
+  documentDate?: string;
 }
 
 export default function LineItemsForm({
   products, items, onChange, vatApplicable, onVatChange,
   priceField = 'sellingPrice', showCost = false,
-  showDiscount = false, discount = 0, onDiscountChange, taxSide,
+  showDiscount = false, discount = 0, onDiscountChange, taxSide, documentDate,
 }: Props) {
+  const { registeredOn } = useCompanyVatSettings();
+  const registered = registeredOn(documentDate);
   const side = taxSide ?? (priceField === 'costPrice' ? 'PURCHASE' : 'SALES');
-  const codeOptions = TAX_CODE_OPTIONS.filter((o) => side === 'PURCHASE' || !['RC', 'IMP'].includes(o.value));
+  // Only sales are locked before registration. Purchases can still be with or without VAT.
+  const salesLocked = registered === false && side === 'SALES';
+  const codeOptions = salesLocked
+    ? TAX_CODE_OPTIONS.filter((o) => (UNREGISTERED_TAX_CODES as readonly string[]).includes(o.value))
+    : TAX_CODE_OPTIONS.filter((o) => side === 'PURCHASE' || !['RC', 'IMP'].includes(o.value));
+  const showTax = vatApplicable || salesLocked;
+
+  const unregisteredCode = (code: string | null | undefined, productCode?: string | null) => {
+    const explicit = (code || '').toUpperCase();
+    if (explicit === 'ZR' || explicit === 'EX') return explicit;
+    const product = (productCode || '').toUpperCase();
+    return product === 'ZR' || product === 'EX' ? product : 'ZR';
+  };
+
+  useEffect(() => {
+    if (!salesLocked) return;
+    let changed = false;
+    const next = items.map((it) => {
+      const product = products.find((p) => p.id === it.productId);
+      const taxCode = unregisteredCode(it.taxCode, product?.taxCode);
+      if (taxCode === (it.taxCode || '')) return it;
+      changed = true;
+      return { ...it, taxCode };
+    });
+    if (changed) onChange(next);
+  }, [salesLocked, items, products, onChange]);
+
   const addItem = () => {
-    onChange([...items, { productId: '', quantity: 1, unitPrice: 0, vatRate: 5 }]);
+    onChange([...items, {
+      productId: '', quantity: 1, unitPrice: 0, vatRate: salesLocked ? 0 : 5,
+      taxCode: salesLocked ? 'ZR' : 'SR',
+    }]);
   };
 
   const updateItem = (index: number, field: keyof LineItem, value: string | number) => {
@@ -123,6 +157,10 @@ export default function LineItemsForm({
   const selectProduct = (index: number, product: Product | null) => {
     if (!product) return;
     const updated = [...items];
+    const productCode = (product.taxCode || '').toUpperCase();
+    const taxCode = salesLocked
+      ? (productCode === 'EX' || productCode === 'ZR' ? productCode : 'ZR')
+      : (productCode || 'SR');
     updated[index] = {
       ...updated[index],
       productId: product.id,
@@ -131,6 +169,7 @@ export default function LineItemsForm({
       unitPrice: money(product[priceField] ?? 0),
       costPrice: money(product.costPrice ?? 0),
       vatRate: money(product.vatRate),
+      taxCode,
     };
     onChange(updated);
   };
@@ -149,15 +188,32 @@ export default function LineItemsForm({
 
   return (
     <Box>
-      <FormControlLabel
-        control={<Checkbox checked={vatApplicable} onChange={(e) => onVatChange(e.target.checked)} />}
-        label="VAT Applicable (Tax Invoice)"
-        sx={{ mb: 1 }}
-      />
-      {!vatApplicable && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontStyle: 'italic' }}>
-          This invoice is outside the VAT system and will not appear in VAT reports.
-        </Typography>
+      {salesLocked ? (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          This company is not VAT-registered for this date — the TRN is missing, or the VAT registration date has not been reached.
+          The document title is INVOICE. Tax code can only be zero rated (ZR) or exempt (EX).
+        </Alert>
+      ) : (
+        <>
+          {registered === false && side === 'PURCHASE' && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Purchases can be with or without VAT whether or not this company is VAT-registered.
+              Tick VAT Applicable when the supplier charged VAT. Until this company is registered, that VAT is not recoverable and is included in the cost.
+            </Alert>
+          )}
+          <FormControlLabel
+            control={<Checkbox checked={vatApplicable} onChange={(e) => onVatChange(e.target.checked)} />}
+            label={side === 'PURCHASE' ? 'VAT Applicable' : 'VAT Applicable (Tax Invoice)'}
+            sx={{ mb: 1 }}
+          />
+          {!vatApplicable && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontStyle: 'italic' }}>
+              {side === 'PURCHASE'
+                ? 'This purchase has no VAT.'
+                : 'This invoice is outside the VAT system and will not appear in VAT reports.'}
+            </Typography>
+          )}
+        </>
       )}
       <TableContainer component={Paper} variant="outlined">
         <Table size="small">
@@ -170,9 +226,9 @@ export default function LineItemsForm({
               <TableCell align="right">Qty</TableCell>
               {showCost && <TableCell align="right">Purchase Cost</TableCell>}
               <TableCell align="right">Unit Price</TableCell>
-              {vatApplicable && <TableCell>Tax code</TableCell>}
-              {vatApplicable && <TableCell align="right">VAT %</TableCell>}
-              {vatApplicable && <TableCell align="right">VAT Amt</TableCell>}
+              {showTax && <TableCell>Tax code</TableCell>}
+              {showTax && <TableCell align="right">VAT %</TableCell>}
+              {showTax && <TableCell align="right">VAT Amt</TableCell>}
               <TableCell align="right">Total</TableCell>
               <TableCell />
             </TableRow>
@@ -207,20 +263,20 @@ export default function LineItemsForm({
                   <TableCell align="right">
                     <NumberField value={item.unitPrice} onChange={(v) => updateItem(i, 'unitPrice', v)} width={100} />
                   </TableCell>
-                  {vatApplicable && (
-                    <TableCell sx={{ minWidth: 110 }}>
-                      <TextField select size="small" fullWidth value={item.taxCode || ''}
+                  {showTax && (
+                    <TableCell sx={{ minWidth: 150 }}>
+                      <TextField select size="small" fullWidth value={item.taxCode || (salesLocked ? 'ZR' : '')}
                         SelectProps={{ native: true }}
                         onChange={(e) => updateItem(i, 'taxCode', e.target.value)}>
-                        <option value="">Default{product?.taxCode ? ` (${product.taxCode})` : ''}</option>
-                        {codeOptions.map((o) => <option key={o.value} value={o.value}>{o.value}</option>)}
+                        {!salesLocked && <option value="">Default{product?.taxCode ? ` (${product.taxCode})` : ' (SR)'}</option>}
+                        {codeOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </TextField>
                     </TableCell>
                   )}
-                  {vatApplicable && (
-                    <TableCell align="right">{chargedRate(item.taxCode || product?.taxCode || undefined, item.vatRate)}%</TableCell>
+                  {showTax && (
+                    <TableCell align="right">{chargedRate(item.taxCode || (salesLocked ? 'ZR' : product?.taxCode || undefined), item.vatRate)}%</TableCell>
                   )}
-                  {vatApplicable && (
+                  {showTax && (
                     <TableCell align="right">{fmtMoney(calc.vat)}</TableCell>
                   )}
                   <TableCell align="right">{fmtMoney(calc.total)}</TableCell>
@@ -237,7 +293,7 @@ export default function LineItemsForm({
         <Button startIcon={<Add />} onClick={addItem} size="small">Add Line</Button>
         <Box sx={{ textAlign: 'right' }}>
           <div>Subtotal: {fmtMoney(lineTotals.sub)}</div>
-          {vatApplicable && <div>VAT: {fmtMoney(lineTotals.vat)}</div>}
+          {showTax && <div>VAT: {fmtMoney(lineTotals.vat)}</div>}
           {showDiscount && onDiscountChange && (
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1, my: 0.5 }}>
               <span>Discount:</span>

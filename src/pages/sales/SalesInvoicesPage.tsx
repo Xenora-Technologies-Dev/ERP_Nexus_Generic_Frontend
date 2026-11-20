@@ -16,6 +16,7 @@ import LineItemsForm, { LineItem, NumberField } from '../../components/common/Li
 import DocumentDateField from '../../components/common/DocumentDateField';
 import CustomerCopyPrompt from '../../components/common/CustomerCopyPrompt';
 import { todayISO, toInputDate, formatDateDDMMYYYY } from '../../utils/date';
+import { useCompanyVatSettings } from '../../utils/useVatRegistration';
 
 function dueDateFromCreditDays(invoiceDateIso: string, creditDays?: number | null): string {
   const days = qtyOut(creditDays || 0);
@@ -44,6 +45,7 @@ interface InvoiceItem {
   productId: string; description: string; quantity: number;
   unitPrice: number; vatRate: number; vatAmount: number; total: number; unit?: string;
   product?: { name?: string; unit?: string };
+  taxCode?: string | null;
 }
 interface InvoicePreview {
   customer: Customer;
@@ -83,6 +85,7 @@ const downloadPdf = async (id: string, partyName: string, docNumber: string, cus
 
 export default function SalesInvoicesPage() {
   const { user } = useAuth();
+  const { registeredOn } = useCompanyVatSettings();
   const isAdmin = !!user?.permissions?.includes('system.admin');
   const [invoices, setInvoices] = useState<SalesInvoice[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -193,7 +196,7 @@ export default function SalesInvoicesPage() {
     setPreview(null);
   };
 
-  const handlePreview = async () => {
+  const handlePreview = async (dateOverride = invoiceDate) => {
     if (selectedDnIds.length === 0) {
       setError('Select at least one delivery note');
       return;
@@ -203,11 +206,12 @@ export default function SalesInvoicesPage() {
     try {
       const res = await api.post<InvoicePreview>('/sales/invoices/preview', {
         deliveryNoteIds: selectedDnIds,
+        date: dateOverride,
       });
       setPreview(res.data);
       setEditDiscount(res.data.discount);
       setEditNotes(res.data.notes || '');
-      setEditVat(res.data.vatApplicable);
+      setEditVat(registeredOn(dateOverride) === false ? false : res.data.vatApplicable);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setError(msg || 'Failed to preview invoice');
@@ -454,6 +458,8 @@ export default function SalesInvoicesPage() {
     },
   ];
 
+  const createRegistered = registeredOn(invoiceDate);
+  const editRegistered = registeredOn(editDate);
   const pricedPreview = preview ? previewDocument(preview.items, editVat, editDiscount) : null;
   const displayPreview = preview && pricedPreview ? {
     ...preview,
@@ -526,7 +532,7 @@ export default function SalesInvoicesPage() {
                 </TableContainer>
               )}
 
-              <Button variant="outlined" onClick={handlePreview} disabled={selectedDnIds.length === 0 || saving} sx={{ mb: 2 }}>
+              <Button variant="outlined" onClick={() => { void handlePreview(); }} disabled={selectedDnIds.length === 0 || saving} sx={{ mb: 2 }}>
                 {saving ? <CircularProgress size={18} /> : 'Preview Invoice'}
               </Button>
             </>
@@ -535,9 +541,14 @@ export default function SalesInvoicesPage() {
           {displayPreview && (
             <Box>
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                {editVat ? 'TAX INVOICE' : 'INVOICE'}
+                {createRegistered === false || !editVat ? 'INVOICE' : 'TAX INVOICE'}
               </Typography>
-              {!editVat && (
+              {createRegistered === false && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  No TRN, or the VAT registration date is not yet reached. This document is an INVOICE. Lines are zero rated or exempt only — standard-rated VAT is not available.
+                </Alert>
+              )}
+              {createRegistered !== false && !editVat && (
                 <Alert severity="info" sx={{ mb: 2 }}>
                   This invoice is outside the VAT system and will not appear in VAT reports.
                 </Alert>
@@ -550,7 +561,11 @@ export default function SalesInvoicesPage() {
                   </Grid>
                 )}
                 <Grid item xs={12} sm={6}>
-                  <DocumentDateField value={invoiceDate} onChange={(v) => { setInvoiceDate(v); if (selectedCustomer && D(selectedCustomer.creditDays).gt(0)) setDueDate(dueDateFromCreditDays(v, selectedCustomer.creditDays)); }} />
+                  <DocumentDateField value={invoiceDate} onChange={(v) => {
+                    setInvoiceDate(v);
+                    if (selectedCustomer && D(selectedCustomer.creditDays).gt(0)) setDueDate(dueDateFromCreditDays(v, selectedCustomer.creditDays));
+                    if (selectedDnIds.length) void handlePreview(v);
+                  }} />
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   {D(selectedCustomer?.creditDays).gt(0) && (
@@ -565,7 +580,10 @@ export default function SalesInvoicesPage() {
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <FormControlLabel control={<Checkbox checked={editVat} onChange={(e) => setEditVat(e.target.checked)} disabled={!isAdmin} />} label="VAT Applicable" />
+                  <FormControlLabel
+                    control={<Checkbox checked={createRegistered === false ? false : editVat} onChange={(e) => setEditVat(e.target.checked)} disabled={createRegistered === false || !isAdmin} />}
+                    label={createRegistered === false ? 'Tax invoice (available after VAT registration)' : 'VAT Applicable'}
+                  />
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -599,7 +617,8 @@ export default function SalesInvoicesPage() {
                       <TableCell>Description</TableCell><TableCell align="center">UOM</TableCell>
                       <TableCell align="right">Qty</TableCell><TableCell align="right">Price</TableCell>
                       <TableCell align="right">Value</TableCell>
-                      {editVat && <TableCell align="right">VAT</TableCell>}
+                      <TableCell>Tax</TableCell>
+                      {editVat && createRegistered !== false && <TableCell align="right">VAT</TableCell>}
                       <TableCell align="right">Total</TableCell>
                     </TableRow>
                   </TableHead>
@@ -613,7 +632,8 @@ export default function SalesInvoicesPage() {
                           <TableCell align="right">{fmtMoney(item.quantity)}</TableCell>
                           <TableCell align="right">{fmtMoney(item.unitPrice)}</TableCell>
                           <TableCell align="right">{fmtMoney(line?.net ?? lineNet(item))}</TableCell>
-                          {editVat && <TableCell align="right">{fmtMoney(line?.vat ?? 0)}</TableCell>}
+                          <TableCell>{item.taxCode || (createRegistered === false ? 'ZR' : 'SR')}</TableCell>
+                          {editVat && createRegistered !== false && <TableCell align="right">{fmtMoney(line?.vat ?? 0)}</TableCell>}
                           <TableCell align="right">{fmtMoney(line?.total ?? item.total)}</TableCell>
                         </TableRow>
                       );
@@ -623,7 +643,7 @@ export default function SalesInvoicesPage() {
               </TableContainer>
               <Box sx={{ textAlign: 'right' }}>
                 <Typography>Subtotal: {fmtMoney(displayPreview.subtotal)}</Typography>
-                {displayPreview.vatApplicable && <Typography>VAT: {fmtMoney(displayPreview.vatAmount)}</Typography>}
+                {displayPreview.vatApplicable && createRegistered !== false && <Typography>VAT: {fmtMoney(displayPreview.vatAmount)}</Typography>}
                 {editDiscount > 0 && !displayPreview.discountExceedsSubtotal && (
                   <Typography>Discount: -{fmtMoney(displayPreview.discount)}</Typography>
                 )}
@@ -643,7 +663,7 @@ export default function SalesInvoicesPage() {
       <Dialog open={editOpen} onClose={() => { setEditOpen(false); setEditingInvoice(null); }} maxWidth="lg" fullWidth>
         <form onSubmit={handleSaveEdit}>
           <DialogTitle>
-            Edit Invoice {editingInvoice ? displayDocumentNumber(editingInvoice.documentNumber) : ''}
+            Edit {editRegistered === false || !editFormVat ? 'Invoice' : 'Tax Invoice'} {editingInvoice ? displayDocumentNumber(editingInvoice.documentNumber) : ''}
             {editingInvoice && editingInvoice.status !== 'DRAFT' && (
               <Typography variant="caption" display="block" color="text.secondary">
                 Posted invoice — saving will reverse and repost the accounts journal
@@ -706,10 +726,11 @@ export default function SalesInvoicesPage() {
               items={editItems}
               onChange={setEditItems}
               vatApplicable={editFormVat}
-              onVatChange={(v) => { if (isAdmin || editingInvoice?.status === 'DRAFT') setEditFormVat(v); }}
+              onVatChange={(v) => { if (editRegistered !== false && (isAdmin || editingInvoice?.status === 'DRAFT')) setEditFormVat(v); }}
               showDiscount
               discount={editFormDiscount}
               onDiscountChange={setEditFormDiscount}
+              documentDate={editDate}
             />
           </DialogContent>
           <DialogActions>

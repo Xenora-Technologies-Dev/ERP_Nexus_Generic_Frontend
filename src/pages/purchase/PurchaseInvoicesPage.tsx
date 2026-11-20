@@ -13,6 +13,7 @@ import DocumentTable, { StatusChip } from '../../components/common/DocumentTable
 import LineItemsForm, { LineItem, NumberField } from '../../components/common/LineItemsForm';
 import DocumentDateField from '../../components/common/DocumentDateField';
 import { todayISO, toInputDate, formatDateDDMMYYYY } from '../../utils/date';
+import { useCompanyVatSettings } from '../../utils/useVatRegistration';
 
 interface Vendor { id: string; name: string; code: string; currency?: string; }
 interface Product {
@@ -60,6 +61,7 @@ const downloadPdf = async (id: string, partyName: string, docNumber: string) => 
 };
 
 export default function PurchaseInvoicesPage() {
+  const { registeredOn } = useCompanyVatSettings();
   const [invoices, setInvoices] = useState<PurchaseInvoice[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -459,11 +461,16 @@ export default function PurchaseInvoicesPage() {
                   Reference: {displayPreview.reference}
                 </Typography>
               )}
-              {!editVat && (
+              {registeredOn(invoiceDate) === false ? (
                 <Alert severity="info" sx={{ mb: 2 }}>
-                  This invoice is outside the VAT system and will not appear in VAT reports.
+                  Purchases can be with or without VAT. Tick VAT Applicable when the supplier charged VAT.
+                  Until this company is VAT-registered, that VAT is included in the cost and is not recoverable.
                 </Alert>
-              )}
+              ) : !editVat ? (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  This purchase has no VAT and will not appear in VAT reports.
+                </Alert>
+              ) : null}
               <Grid container spacing={2} sx={{ mb: 2 }}>
                 <Grid item xs={12} sm={6}>
                   <DocumentDateField value={invoiceDate} onChange={setInvoiceDate} />
@@ -602,6 +609,7 @@ export default function PurchaseInvoicesPage() {
               showDiscount
               discount={editFormDiscount}
               onDiscountChange={setEditFormDiscount}
+              documentDate={editDate}
             />
           </DialogContent>
           <DialogActions>

@@ -360,7 +360,7 @@ export default function PurchaseOrdersPage() {
             </Grid>
             <LineItemsForm products={products} items={items} onChange={setItems}
               vatApplicable={vatApplicable} onVatChange={setVatApplicable} priceField="costPrice"
-              showDiscount discount={discount} onDiscountChange={setDiscount} />
+              showDiscount discount={discount} onDiscountChange={setDiscount} documentDate={date} />
             <TextField fullWidth label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} sx={{ mt: 2 }} />
           </DialogContent>
           <DialogActions>

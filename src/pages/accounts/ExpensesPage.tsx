@@ -11,6 +11,7 @@ import { api } from '../../api/client';
 import PageHeader from '../../components/common/PageHeader';
 import DocumentTable from '../../components/common/DocumentTable';
 import { NumberField } from '../../components/common/LineItemsForm';
+import { useCompanyVatSettings } from '../../utils/useVatRegistration';
 
 interface ExpenseSection {
   id: string;
@@ -46,6 +47,7 @@ interface ExpenseSummaryResponse {
 const PAYMENT_METHODS = ['CASH', 'BANK_TRANSFER', 'CHEQUE', 'CARD', 'OWNER_PERSONAL'];
 
 export default function ExpensesPage() {
+  const { registeredOn } = useCompanyVatSettings();
   const [tab, setTab] = useState(0);
   const [sections, setSections] = useState<ExpenseSection[]>([]);
   const [entries, setEntries] = useState<ExpenseEntry[]>([]);
@@ -69,6 +71,15 @@ export default function ExpensesPage() {
     prepaidStartDate: '', prepaidEndDate: '',
   });
   const [sectionForm, setSectionForm] = useState({ name: '', description: '', subSectionName: '' });
+
+  const expenseRegistered = registeredOn(entryForm.date);
+  const expenseTaxOptions = [
+    { value: 'OOS', label: 'OOS — no VAT' },
+    { value: 'SR', label: expenseRegistered === false ? 'SR — VAT charged, included in the cost' : 'SR — standard rated, VAT recoverable' },
+    { value: 'BLOCKED', label: 'BLOCKED — VAT paid, not recoverable' },
+    { value: 'ZR', label: 'ZR — zero rated' },
+    { value: 'EX', label: 'EX — exempt' },
+  ];
 
   const fetchData = async () => {
     setLoading(true);
@@ -340,12 +351,9 @@ export default function ExpensesPage() {
               <Grid item xs={12} sm={6}>
                 <TextField fullWidth select label="Tax code" value={entryForm.taxCode}
                   SelectProps={{ native: true }}
+                  helperText={expenseRegistered === false ? 'With or without VAT. Supplier VAT is not recoverable and is included in the cost.' : undefined}
                   onChange={(e) => setEntryForm({ ...entryForm, taxCode: e.target.value, vatApplicable: ['SR', 'BLOCKED'].includes(e.target.value) })}>
-                  <option value="OOS">OOS — out of scope / no VAT</option>
-                  <option value="SR">SR — standard rated, VAT recoverable</option>
-                  <option value="BLOCKED">BLOCKED — VAT paid, not recoverable</option>
-                  <option value="ZR">ZR — zero rated</option>
-                  <option value="EX">EX — exempt</option>
+                  {expenseTaxOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </TextField>
               </Grid>
               {entryForm.vatApplicable && (

@@ -117,7 +117,9 @@ export default function InventoryPage() {
         sku: product.sku, name: product.name, description: product.description || '',
         categoryId: product.categoryId || '', unit: product.unit, packing: product.packing || '',
         costPrice: money(product.costPrice), sellingPrice: money(product.sellingPrice),
-        vatRate: money(product.vatRate), taxCode: product.taxCode || 'SR', countryOfOrigin: product.countryOfOrigin || '',
+        vatRate: money(product.vatRate),
+        taxCode: product.taxCode || 'SR',
+        countryOfOrigin: product.countryOfOrigin || '',
         isActive: product.isActive, trackBatches: !!product.trackBatches,
       });
     } else {
@@ -416,7 +418,7 @@ export default function InventoryPage() {
                 </Grid>
                 <Grid item xs={12} sm={8}>
                   <TextField select fullWidth label="Default UAE tax code" value={productForm.taxCode}
-                    helperText="Applied to invoice lines unless the document overrides it"
+                    helperText="Used on purchase lines as entered. Sales invoices use zero rated or exempt until the company is VAT-registered."
                     onChange={(e) => setProductForm({ ...productForm, taxCode: e.target.value })}>
                     {TAX_CODE_OPTIONS.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
                   </TextField>

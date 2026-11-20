@@ -202,7 +202,7 @@ export default function QuotationsPage() {
               </Grid>
             </Grid>
             <LineItemsForm products={products} items={items} onChange={setItems}
-              vatApplicable={vatApplicable} onVatChange={setVatApplicable} />
+              vatApplicable={vatApplicable} onVatChange={setVatApplicable} documentDate={date} />
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setDialogOpen(false)}>Cancel</Button>

@@ -113,10 +113,23 @@ export default function ChartOfAccountsPage() {
     }));
   }, [filtered]);
 
+  const loadNextCode = async (accountGroup: string) => {
+    try {
+      const res = await api.get<{ code: string; accountGroup: string }>('/accounts/chart-of-accounts/next-code', {
+        params: { accountGroup },
+      });
+      setForm((f) => (f.accountGroup === accountGroup ? { ...f, code: res.data.code } : f));
+    } catch {
+      setError('Could not assign the next account number for this group');
+    }
+  };
+
   const openCreate = () => {
+    const next = emptyForm();
     setEditAccount(null);
-    setForm(emptyForm());
+    setForm(next);
     setDialogOpen(true);
+    void loadNextCode(next.accountGroup);
   };
 
   const openEdit = (account: ChartAccount, e: React.MouseEvent) => {
@@ -136,6 +149,7 @@ export default function ChartOfAccountsPage() {
   const handleTypeChange = (accountType: string) => {
     const defaultGroup = meta?.defaultGroupByType[accountType] ?? 'OPERATING_EXPENSES';
     setForm((f) => ({ ...f, accountType, accountGroup: defaultGroup }));
+    if (!editAccount) void loadNextCode(defaultGroup);
   };
 
   const handleSave = async (e: FormEvent) => {
@@ -153,8 +167,8 @@ export default function ChartOfAccountsPage() {
         });
         setSuccess(`Account ${editAccount.code} updated.`);
       } else {
-        await api.post('/accounts/chart-of-accounts', form);
-        setSuccess(`Account ${form.code} — ${form.name} created. Post journal entries from Journal Entries.`);
+        const created = await api.post<ChartAccount>('/accounts/chart-of-accounts', form);
+        setSuccess(`Account ${created.data.code} — ${created.data.name} created. Post journal entries from Journal Entries.`);
       }
       setDialogOpen(false);
       await loadAccounts();
@@ -190,7 +204,7 @@ export default function ChartOfAccountsPage() {
         <Typography variant="subtitle2" fontWeight={600} gutterBottom>How to add accounts and post entries</Typography>
         <Typography variant="body2" component="div">
           <ol style={{ margin: 0, paddingLeft: 20 }}>
-            <li><strong>Add Account</strong> — pick a unique numeric code (e.g. 5301 Office Rent, 1501 Delivery Van). System codes 1000–5200 are reserved.</li>
+            <li><strong>Add Account</strong> — choose the account group. The account number is the next free number in that group.</li>
             <li><strong>Journal Entries</strong> — debit and credit the new account (control accounts AR/AP/VAT/Inventory are blocked for manual posting).</li>
             <li><strong>Automatic entries</strong> — sales/purchase invoices, receipts, and payments post to control accounts automatically.</li>
             <li>Click any account row to open its <strong>General Ledger</strong> drill-down.</li>
@@ -262,10 +276,10 @@ export default function ChartOfAccountsPage() {
                   <TextField
                     label="Account Code"
                     value={form.code}
-                    onChange={(e) => setForm({ ...form, code: e.target.value.replace(/\D/g, '') })}
                     required
                     fullWidth
-                    helperText="Numeric only, must be unique (e.g. 5301)"
+                    disabled
+                    helperText="Next free number in the selected group"
                   />
                 </Grid>
               )}
@@ -298,7 +312,11 @@ export default function ChartOfAccountsPage() {
                   select
                   label="Account Group"
                   value={form.accountGroup}
-                  onChange={(e) => setForm({ ...form, accountGroup: e.target.value })}
+                  onChange={(e) => {
+                    const accountGroup = e.target.value;
+                    setForm({ ...form, accountGroup });
+                    if (!editAccount) void loadNextCode(accountGroup);
+                  }}
                   fullWidth
                 >
                   {(meta?.accountGroups ?? GROUP_ORDER).map((g) => (
@@ -341,7 +359,7 @@ export default function ChartOfAccountsPage() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button type="submit" variant="contained" disabled={saving}>
+            <Button type="submit" variant="contained" disabled={saving || (!editAccount && !form.code)}>
               {saving ? 'Saving…' : editAccount ? 'Update' : 'Create Account'}
             </Button>
           </DialogActions>

@@ -35,7 +35,7 @@ interface Vendor {
 const emptyForm = {
   code: '', name: '', contactPerson: '', email: '', phone: '', address: '',
   city: '', state: '', country: '', postalCode: '', vatNumber: '', emirate: '', isForeign: false, currency: 'AED',
-  paymentTerms: 30, isActive: true,
+  paymentTerms: 0, isActive: true,
 };
 
 export default function VendorsPage() {

@@ -6,7 +6,7 @@ interface Props {
   documentLabel: string;
   busy?: boolean;
   onClose: () => void;
-  /** true = office copy plus a customer copy labelled at the bottom of the PDF. */
+  /** true = office copy plus a customer copy labelled on the left of the PDF footer. */
   onConfirm: (includeCustomerCopy: boolean) => void;
 }
 
@@ -17,7 +17,7 @@ export default function CustomerCopyPrompt({ open, documentLabel, busy, onClose,
       <DialogTitle>Download {documentLabel}</DialogTitle>
       <DialogContent>
         <Typography variant="body2">
-          The office copy downloads on its own. A customer copy is the same document with “Customer Copy” printed at the bottom.
+          The office copy downloads on its own. A customer copy is the same document with “Customer Copy” printed on the left of the footer.
         </Typography>
       </DialogContent>
       <DialogActions>

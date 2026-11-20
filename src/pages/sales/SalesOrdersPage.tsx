@@ -429,7 +429,7 @@ export default function SalesOrdersPage() {
             </Grid>
             <LineItemsForm products={products} items={items} onChange={setItems}
               vatApplicable={vatApplicable} onVatChange={setVatApplicable}
-              showCost showDiscount discount={discount} onDiscountChange={setDiscount} />
+              showCost showDiscount discount={discount} onDiscountChange={setDiscount} documentDate={date} />
           </DialogContent>
           <DialogActions>
             <Button onClick={() => { setFormOpen(false); resetForm(); }}>Cancel</Button>

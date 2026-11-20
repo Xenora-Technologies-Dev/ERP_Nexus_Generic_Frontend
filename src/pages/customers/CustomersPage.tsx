@@ -37,7 +37,7 @@ interface Customer {
 const emptyForm = {
   code: '', name: '', contactPerson: '', email: '', phone: '', address: '',
   city: '', state: '', country: '', postalCode: '', vatNumber: '', emirate: '', isForeign: false, currency: 'AED',
-  creditLimit: 0, creditDays: 30, isActive: true,
+  creditLimit: 0, creditDays: 0, isActive: true,
 };
 
 export default function CustomersPage() {
